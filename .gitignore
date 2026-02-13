@@ -1,0 +1,60 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+
+# ===== 模型权重与大文件 =====
+# MADDPG 模型权重
+models/
+# PPO 技能模型权重
+skills/models/
+# 检查点
+checkpoints/
+
+# ===== 训练日志 =====
+logs/
+
+# ===== PyTorch 权重文件 =====
+*.pth
+*.pt
+*.ckpt
+*.bin
+
+# ===== Stable-Baselines3 模型 =====
+*.zip
+
+# ===== Pickle 文件 (VecNormalize 等) =====
+*.pkl
+
+# ===== 参考工程中的学习曲线 =====
+MADDPG/learning_curves/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.cursor/
+*.code-workspace
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+
+# ===== Temp =====
+temp/
+tmp/

@@ -1,0 +1,25 @@
+# 最大吞吐配置 — 充分利用 4xA100 + 104 核 CPU
+# 用法: python main.py --mode train_coord_multi_gpu --config config/max_throughput.yaml
+#
+# 策略: 不增大模型, 靠海量环境 + 大 batch + 高频梯度更新喂饱 GPU
+
+defaults:
+  device: auto
+  save_dir: models/max_throughput
+
+coord:
+  episodes: 5000
+  n_collect_envs: 64          # 64 个并行环境 (每 GPU 进程)
+  updates_per_step: 32        # 每步 32 次梯度更新
+  batch_size: 1024            # 大 batch
+  buffer_capacity: 1000000    # 100 万经验池
+  warmup_steps: 1024          # = batch_size
+  hidden_dim: 256             # 保持小模型
+  use_rule_skills: true
+  use_attention: true
+  save_interval: 500
+  log_interval: 100
+
+population:
+  n_gpus: 4
+  seeds: [42, 123, 456, 789]

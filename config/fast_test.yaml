@@ -1,0 +1,28 @@
+# 快速测试配置 — 2 分钟跑通全流程
+# 用法: python main.py --mode train_coord --config config/fast_test.yaml
+
+defaults:
+  device: auto
+  save_dir: models/fast_test
+
+skills:
+  timesteps: 5000
+  n_envs: 4
+  batch_size: 256
+  n_steps: 256
+
+coord:
+  episodes: 50
+  n_collect_envs: 4
+  updates_per_step: 4
+  batch_size: 64
+  buffer_capacity: 10000
+  warmup_steps: 50
+  hidden_dim: 128
+  use_rule_skills: true
+  save_interval: 25
+  log_interval: 10
+
+population:
+  n_gpus: 1
+  seeds: [42]

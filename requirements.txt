@@ -1,0 +1,12 @@
+# 坦克大战 - 分层 MADDPG 协同训练
+# 核心依赖
+torch>=2.0.0
+numpy>=1.24.0
+gymnasium>=0.29.0
+tqdm>=4.65.0
+
+# 底层技能训练 (PPO)
+stable-baselines3>=2.1.0
+
+# 可视化
+pygame>=2.5.0

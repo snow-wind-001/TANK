@@ -1,0 +1,81 @@
+# ============================================================
+#  经典坦克大战 — 训练配置 (4xA100 80GB + 104 核 CPU)
+# ============================================================
+#
+#  修改此文件即可调整所有训练参数, 无需改代码.
+#  命令行参数会覆盖此文件中的值:
+#
+#    python main.py --mode train_coord coord.n_collect_envs=32
+#    python main.py --mode train_coord_multi_gpu coord.batch_size=512
+#
+#  核心思路:
+#    GPU 利用率 = f(n_collect_envs × updates_per_step × batch_size)
+#    不靠增大模型, 靠多环境 + 大 batch + 多梯度步充分喂饱 GPU.
+# ============================================================
+
+# ------ 通用 ------
+defaults:
+  device: auto                # auto / cpu / cuda:0 / cuda:1 / ...
+  save_dir: models
+  map_name: classic_1
+  n_blue: 4
+  difficulty: easy            # easy(2v2) / medium(2v3) / hard(2v4)
+  seed: 0
+
+# ------ 底层技能 (PPO via Stable-Baselines3 + 课程学习) ------
+skills:
+  timesteps: 2000000          # 总训练步数 (课程学习模式下为各阶段总和)
+  skill: all                  # navigate / attack / defend / all
+  # --- 并行环境 (CPU 密集, 多开环境是最有效的加速手段) ---
+  n_envs: 32                  # SubprocVecEnv 进程数 (课程学习推荐 32)
+  # --- PPO 超参 (课程学习各阶段内部自动调节 ent_coef 和 lr) ---
+  batch_size: 256             # mini-batch 大小 (更频繁更新, 更快收敛)
+  n_steps: 2048               # 每次 rollout 收集步数
+  # --- 可视化训练 ---
+  vis_freq: 50000             # 可视化评估间隔 (步数)
+
+# ------ 高层协同 (MADDPG) ------
+coord:
+  episodes: 2000              # 训练回合数
+  skill_interval: 4           # 高层决策间隔 (PPO短期更有效)
+  use_rule_skills: true       # true=增强规则技能(推荐), false=PPO 技能
+  use_attention: true         # 注意力 Critic (可提取协作权重)
+  use_comm: false             # 智能体间通讯模块
+  # --- 核心扩展参数 (决定 GPU 利用率) ---
+  n_collect_envs: 32          # 并行收集环境数 (推荐 16-64, 越大 buffer 填越快)
+  updates_per_step: 16        # 每步梯度更新次数 (推荐 8-16, 越大 GPU 越满)
+  batch_size: 512             # MADDPG 批量大小 (推荐 256-1024)
+  # --- 经验池 ---
+  buffer_capacity: 500000     # 经验池容量 (n_collect_envs 大时应增大)
+  warmup_steps: 500           # 热身步数 (batch_size 的 2 倍左右)
+  # --- 网络 ---
+  hidden_dim: 256             # 隐层宽度 (不需要太大, 靠 env/batch 扩展)
+  # --- 保存/日志 ---
+  save_interval: 200
+  log_interval: 50
+
+# ------ 多 GPU 人口训练 ------
+population:
+  n_gpus: 4                   # 使用 GPU 数 (自动检测上限)
+  seeds: [42, 123, 456, 789]  # 每个 GPU 的随机种子
+  # 每个 GPU 进程继承 coord 区的参数
+
+# ------ 可视化 ------
+visualization:
+  num_episodes: 10            # 可视化评估回合数
+  vis_interval: 50            # 训练中可视化间隔 (回合数)
+
+# ============================================================
+#  预设配置方案 (通过 CLI 快速切换)
+# ============================================================
+#
+#  快速测试 (2 分钟验证流程):
+#    python main.py --mode train_coord --config config/fast_test.yaml
+#
+#  最大吞吐 (充分利用 4xA100):
+#    python main.py --mode train_coord_multi_gpu  # 使用默认配置即可
+#
+#  CPU-only:
+#    python main.py --mode train_coord defaults.device=cpu \
+#      coord.n_collect_envs=8 coord.updates_per_step=4 coord.batch_size=128
+# ============================================================
