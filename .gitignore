@@ -14,8 +14,9 @@ venv/
 env/
 
 # ===== 模型权重与大文件 =====
-# MADDPG 模型权重
-models/
+# MADDPG 模型权重 (排除非最佳权重)
+models/*
+!models/maddpg_best/
 # PPO 技能模型权重
 skills/models/
 # 检查点
@@ -24,11 +25,12 @@ checkpoints/
 # ===== 训练日志 =====
 logs/
 
-# ===== PyTorch 权重文件 =====
+# ===== PyTorch 权重文件 (排除最佳权重) =====
 *.pth
 *.pt
 *.ckpt
 *.bin
+!models/maddpg_best/*.pth
 
 # ===== Stable-Baselines3 模型 =====
 *.zip

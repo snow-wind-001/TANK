@@ -48,6 +48,8 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--start_stage", type=int, default=0,
                         help="从第几阶段开始 (0-based)")
+    parser.add_argument("--resume", type=str, default=None,
+                        help="从指定模型目录恢复训练 (如 models/maddpg_best)")
     args = parser.parse_args()
 
     for idx, stage in enumerate(STAGES):
@@ -60,8 +62,13 @@ if __name__ == "__main__":
         print(f"  目标胜率: {stage['target_win_rate']:.0%}")
         print(f"{'#' * 70}\n")
 
-        # 第一阶段从零开始, 后续阶段加载上一阶段的模型
-        resume = "models/maddpg_latest" if idx > 0 else None
+        # 确定恢复目录: 用户指定 > 上一阶段最佳模型 > 从零开始
+        if idx == args.start_stage and args.resume:
+            resume_dir = args.resume
+        elif idx > args.start_stage:
+            resume_dir = "models/maddpg_best"
+        else:
+            resume_dir = None
 
         train(
             episodes=stage["episodes"],
@@ -76,6 +83,7 @@ if __name__ == "__main__":
             save_dir="models",
             save_interval=500,
             device_str=args.device,
+            resume_dir=resume_dir,
         )
 
         print(f"\n  {stage['label']} 训练完成!")

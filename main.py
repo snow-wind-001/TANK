@@ -93,6 +93,30 @@ def _resolve_device(device_str: str) -> str:
     return device_str
 
 
+def _detect_model_config(model_dir: str) -> dict:
+    """从模型检查点自动检测 use_comm / use_attention 配置."""
+    import torch
+    config = {"use_comm": False, "use_attention": True}
+
+    meta_path = os.path.join(model_dir, "meta.pth")
+    if os.path.exists(meta_path):
+        meta = torch.load(meta_path, map_location="cpu", weights_only=False)
+        config["use_comm"] = meta.get("use_comm", False)
+        config["use_attention"] = meta.get("use_attention", True)
+
+    # 通过 actor 权重第一层形状兜底检测
+    actor_path = os.path.join(model_dir, "actor_0.pth")
+    if os.path.exists(actor_path):
+        state = torch.load(actor_path, map_location="cpu", weights_only=True)
+        key = "shared.0.weight"
+        if key in state:
+            from envs.multi_tank_env import OBS_DIM
+            if state[key].shape[1] > OBS_DIM:
+                config["use_comm"] = True
+
+    return config
+
+
 def _auto_coord_device(device_str: str) -> str:
     """为 MADDPG 自动选择 GPU."""
     if device_str != "auto":
@@ -242,18 +266,22 @@ def mode_visualize(cfg: DictConfig) -> None:
         use_rule_skills=cfg.coord.use_rule_skills, device="cpu",
     )
 
+    model_dir = os.path.join(cfg.defaults.save_dir, "maddpg_best")
+    model_cfg = _detect_model_config(model_dir) if os.path.exists(model_dir) else {}
+
     trainer = MaddpgTrainer(
         n_agents=N_AGENTS, obs_dim=OBS_DIM, num_skills=NUM_SKILLS,
         param_dim=PARAM_DIM,
-        use_attention=cfg.coord.use_attention,
+        use_attention=model_cfg.get("use_attention", cfg.coord.use_attention),
+        use_comm=model_cfg.get("use_comm", False),
         device=device,
         hidden_dim=cfg.coord.hidden_dim,
     )
 
-    model_dir = os.path.join(cfg.defaults.save_dir, "maddpg_best")
     if os.path.exists(model_dir):
         trainer.load(model_dir)
         print(f"[可视化] 已加载模型: {model_dir}")
+        print(f"  use_comm={model_cfg.get('use_comm')}, use_attention={model_cfg.get('use_attention')}")
     else:
         print("[可视化] 未找到模型, 使用随机策略")
 
@@ -327,16 +355,22 @@ def mode_visualize_coop(cfg: DictConfig) -> None:
         use_rule_skills=cfg.coord.use_rule_skills, device="cpu",
     )
 
+    model_dir = os.path.join(cfg.defaults.save_dir, "maddpg_best")
+    model_cfg = _detect_model_config(model_dir) if os.path.exists(model_dir) else {}
+
     trainer = MaddpgTrainer(
         n_agents=N_AGENTS, obs_dim=OBS_DIM, num_skills=NUM_SKILLS,
-        param_dim=PARAM_DIM, use_attention=True, device=device,
+        param_dim=PARAM_DIM,
+        use_attention=model_cfg.get("use_attention", True),
+        use_comm=model_cfg.get("use_comm", False),
+        device=device,
         hidden_dim=cfg.coord.hidden_dim,
     )
 
-    model_dir = os.path.join(cfg.defaults.save_dir, "maddpg_best")
     if os.path.exists(model_dir):
         trainer.load(model_dir)
         print(f"[协同可视化] 已加载模型: {model_dir}")
+        print(f"  use_comm={model_cfg.get('use_comm')}, use_attention={model_cfg.get('use_attention')}")
     else:
         print("[协同可视化] 未找到模型, 使用随机策略 (仍可看到协作权重)")
 

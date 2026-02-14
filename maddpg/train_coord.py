@@ -319,6 +319,7 @@ def train(
     use_attention: bool = True,
     use_comm: bool = False,
     seed: int = 0,
+    resume_dir: str | None = None,  # 从指定模型目录恢复训练
     # 兼容旧接口
     batch_size: int | None = None,
 ) -> None:
@@ -388,6 +389,15 @@ def train(
         device=device,
         hidden_dim=effective_hidden,
     )
+
+    # 恢复训练: 从指定模型目录加载权重
+    if resume_dir and os.path.exists(resume_dir):
+        trainer.load(resume_dir)
+        print(f"[续训] 已从 {resume_dir} 恢复权重 "
+              f"(updates={trainer._update_count}, gumbel_tau={trainer.gumbel_tau:.4f})")
+    elif resume_dir:
+        print(f"[续训] 目录 {resume_dir} 不存在, 从零开始训练")
+
     buffer = MaddpgBuffer(
         capacity=buffer_capacity,
         n_agents=N_AGENTS,
@@ -755,6 +765,8 @@ def main() -> None:
     parser.add_argument("--use_attention", action="store_true", default=True)
     parser.add_argument("--no_attention", action="store_true")
     parser.add_argument("--use_comm", action="store_true")
+    parser.add_argument("--resume", type=str, default=None,
+                        help="从指定模型目录恢复训练 (如 models/maddpg_best)")
     parser.add_argument("--population", action="store_true",
                         help="多 GPU 人口训练 (每块 GPU 一个独立训练)")
     args = parser.parse_args()
@@ -796,6 +808,7 @@ def main() -> None:
             use_attention=use_attention,
             use_comm=args.use_comm,
             seed=args.seed,
+            resume_dir=args.resume,
         )
 
 

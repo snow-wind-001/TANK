@@ -442,6 +442,7 @@ class BattleCityEngine:
             return
         dx, dy = DIR_DELTA[tank.direction]
         bx, by = tank.x + dx, tank.y + dy
+
         bullet = Bullet(
             x=bx, y=by,
             direction=tank.direction,
@@ -449,26 +450,37 @@ class BattleCityEngine:
             owner_id=tank.tank_id,
             owner_team=tank.team,
         )
+
+        # 子弹生成后立即检查初始位置是否有碰撞
+        # (坦克紧贴墙壁/敌人射击的情况)
         self.bullets.append(bullet)
         tank.has_bullet = True
         tank.fire_cooldown = tank.max_fire_cooldown
+        self._check_bullet_collision(bullet)
+
+        # 如果子弹在初始位置就碰撞了, 立即清理
+        if not bullet.alive:
+            self.bullets.remove(bullet)
+            tank.has_bullet = False
 
     # ------------------------------------------------------------------
     #  子弹更新
     # ------------------------------------------------------------------
 
     def _update_bullets(self) -> None:
-        """更新所有子弹位置并检测碰撞."""
-        # 子弹可能有不同速度, 取最大速度做多步模拟
-        max_speed = max((b.speed for b in self.bullets), default=0)
-        for _ in range(max_speed):
-            for bullet in self.bullets:
+        """更新所有子弹位置并检测碰撞.
+
+        关键修复: 子弹每步只移动 1 格并立即检测碰撞,
+        保证 speed>1 的子弹不会跳过中间格(穿墙/穿坦克).
+        """
+        # 每颗子弹按自身速度逐格移动, 每移动1格就做碰撞检测
+        for bullet in self.bullets:
+            if not bullet.alive:
+                continue
+            dx, dy = DIR_DELTA[bullet.direction]
+            for _ in range(bullet.speed):
                 if not bullet.alive:
-                    continue
-                # 只有速度足够的子弹在这个子步移动
-                if _ >= bullet.speed:
-                    continue
-                dx, dy = DIR_DELTA[bullet.direction]
+                    break
                 bullet.x += dx
                 bullet.y += dy
                 self._check_bullet_collision(bullet)
@@ -487,7 +499,11 @@ class BattleCityEngine:
                 tank.has_bullet = False
 
     def _check_bullet_collision(self, bullet: Bullet) -> None:
-        """检测子弹碰撞."""
+        """检测子弹碰撞.
+
+        检查子弹当前位置和**前一位置**上的坦克, 防止子弹与坦克
+        在同一帧内交错而过 (坦克先移动到子弹前一格, 子弹再飞过去).
+        """
         x, y = bullet.x, bullet.y
 
         # 出界
@@ -520,32 +536,50 @@ class BattleCityEngine:
         # 水面 / 树林: 子弹穿过
         # (水面子弹飞越, 树林子弹穿过)
 
-        # 坦克碰撞
-        for tank in self.tanks:
-            if not tank.alive:
-                continue
-            if tank.tank_id == bullet.owner_id:
-                continue  # 不伤自己
-            if tank.team == bullet.owner_team:
-                continue  # 不伤友军
-            if tank.x == x and tank.y == y:
-                tank.health -= BULLET_DAMAGE
-                bullet.alive = False
-                if tank.health <= 0:
-                    tank.alive = False
-                    self._events.append(("tank_killed", tank.team, tank.tank_id))
-                else:
-                    self._events.append(("tank_hit", tank.team, tank.tank_id))
-                return
+        # 坦克碰撞: 检查当前位置 + 前一位置 (防交错)
+        dx, dy = DIR_DELTA[bullet.direction]
+        prev_x, prev_y = x - dx, y - dy  # 子弹移动前的位置
+        check_positions = [(x, y)]
+        # 如果前一位置在界内, 也检查 (防止坦克移到子弹飞过的格子)
+        if 0 <= prev_x < self.width and 0 <= prev_y < self.height:
+            check_positions.append((prev_x, prev_y))
 
-        # 子弹互相碰撞
+        for cx, cy in check_positions:
+            for tank in self.tanks:
+                if not tank.alive:
+                    continue
+                if tank.tank_id == bullet.owner_id:
+                    continue  # 不伤自己
+                if tank.team == bullet.owner_team:
+                    continue  # 不伤友军
+                if tank.x == cx and tank.y == cy:
+                    tank.health -= BULLET_DAMAGE
+                    bullet.alive = False
+                    if tank.health <= 0:
+                        tank.alive = False
+                        self._events.append(("tank_killed", tank.team, tank.tank_id))
+                    else:
+                        self._events.append(("tank_hit", tank.team, tank.tank_id))
+                    return
+
+        # 子弹互相碰撞 (同样检查当前位置和相邻位置)
         for other in self.bullets:
             if other is bullet or not other.alive:
                 continue
+            # 两颗子弹在同一格
             if other.x == x and other.y == y:
                 bullet.alive = False
                 other.alive = False
                 return
+            # 两颗子弹对向飞行交错: 子弹A的当前位置 == 子弹B的前一位置
+            odx, ody = DIR_DELTA[other.direction]
+            if other.x - odx == x and other.y - ody == y:
+                if bullet.x == other.x and bullet.y == other.y:
+                    pass  # 已经在上面处理了
+                elif prev_x == other.x and prev_y == other.y:
+                    bullet.alive = False
+                    other.alive = False
+                    return
 
     # ------------------------------------------------------------------
     #  观测辅助
